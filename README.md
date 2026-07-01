@@ -256,3 +256,5 @@ Building this platform was an incredible journey into the world of distributed s
 
 ---
 *If you found this project interesting or helpful, don't forget to leave a ⭐!*
+#   S H O P A B L E - S T R E A M I N G - P L A T F O R M  
+ 
