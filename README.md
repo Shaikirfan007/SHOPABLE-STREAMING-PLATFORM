@@ -1,260 +1,94 @@
-# 🎬 Shoppable-Streaming Platform — Microservices
+# 🛒 Shoppable Streaming Platform
 
-⭐ If this project is helpful to you, please star this repo.
-## 📌 What I Built
-A complete **Shoppable-Streaming Platform** from scratch — production level code engineered to merge entertainment and e-commerce, giving users a seamless, tactile (haptic) feel to both watch and shop simultaneously.
-You upload a video → FFmpeg encodes to 4 qualities automatically
-                   → HLS chunks stored on AWS S3
-                   → Streaming Service generates secure signed URLs
-                   → Custom HLS Player streams the video
-
-## 🏗️ Architecture
-Admin adds movie → Content Service → MySQL
-
-Admin uploads video → Video Service → AWS S3
-                                         ↓
-                              Kafka (video.uploaded)
-                                         ↓
-                              Encoding Service
-                                         ↓
-                    FFmpeg → 1080p, 720p, 480p, 360p HLS chunks
-                                         ↓
-                              Upload encoded files → AWS S3
-                                         ↓
-                              Kafka (video.encoded)
-                                         ↓
-                    ┌──────────────────────────────────┐
-                    │                                  │
-             Content Service                  Streaming Service
-          updates HLS URL in MySQL          stores playlist key in Redis
-                                                     ↓
-User clicks play → Streaming Service → signs every HLS segment
-                                     → returns signed master.m3u8
-                                     → Custom player streams video ✅
-
-## 🛠️ Services Overview
-
-| Service | Port | Responsibility |
-|---------|------|----------------|
-| `content-service` | 8081 | Movie catalog — add movies, search, genres |
-| `video-service` | 8082 | Upload raw video to AWS S3 + publish Kafka event |
-| `encoding-service` | 8083 | FFmpeg — encode to 4 qualities + generate HLS |
-| `streaming-service` | 8084 | Generate signed URLs + serve HLS playlists |
-
-## 🔧 Tech Stack
-- **Spring Boot 3.2** — Microservices framework
-- **Apache Kafka** — Event streaming between services
-- **AWS S3** — Video storage (raw + encoded)
-- **FFmpeg** — Video encoding to multiple qualities
-- **Redis** — Streaming URL cache
-- **MySQL** — Movie catalog storage
-- **Docker + Docker Compose** — Infrastructure setup
-- **HLS.js** — Custom video player
-
-## 📋 Prerequisites
-Before running this project make sure you have:
-- ✅ Java 17 / 21
-- ✅ Maven
-- ✅ Docker Desktop
-- ✅ FFmpeg installed
-- ✅ AWS Account with S3 bucket
-
-### Install FFmpeg
-**Windows:**
-```bash
-winget install ffmpeg
-```
-**Mac:**
-```bash
-brew install ffmpeg
-```
-Verify:
-```bash
-ffmpeg -version
-```
-
-## ⚙️ AWS S3 Setup
-**Step 1: Create S3 Bucket**
-- AWS Console → S3 → Create Bucket
-- Name: `shoppable-streaming-videos`
-- Region: `your-region`
-
-**Step 2: Block Public Access Settings**
-- Permissions → Block public access
-
-**Step 3: Create IAM User**
-- IAM → Users → Create User
-- Name: `shoppable-app-user`
-- Policy: `AmazonS3FullAccess`
-- Create Access Key → Save both keys
-
-## 🚀 How To Run
-
-**Step 1: Configure AWS credentials**
-Update `application.yml` in `video-service`, `encoding-service` and `streaming-service`:
-```yaml
-aws:
-  access-key: YOUR_ACCESS_KEY
-  secret-key: YOUR_SECRET_KEY
-  region: YOUR_REGION
-  s3:
-    bucket-name: YOUR_BUCKET_NAME
-```
-
-**Step 2: Start Infrastructure**
-```bash
-docker-compose up -d
-```
-Wait 30 seconds for Kafka to fully initialize.
-
-**Step 3: Start All Services**
-Open 4 separate terminals:
-
-```bash
-# Terminal 1
-cd content-service && mvn spring-boot:run
-
-# Terminal 2
-cd video-service && mvn spring-boot:run
-
-# Terminal 3
-cd encoding-service && mvn spring-boot:run
-
-# Terminal 4
-cd streaming-service && mvn spring-boot:run
-```
-
-## 🧪 Testing Flow
-
-**Step 1: Add a Movie**
-`POST http://localhost:8081/api/v1/movies`
-```json
-Content-Type: application/json
-
-{
-    "title": "Inception",
-    "description": "A mind bending thriller",
-    "genre": "SCI_FI",
-    "director": "Christopher Nolan",
-    "cast": "Leonardo DiCaprio",
-    "releaseYear": 2010,
-    "rating": 8.8,
-    "durationMinutes": 148
-}
-```
-Copy the id from response.
-
-**Step 2: Upload Video**
-`POST http://localhost:8082/api/v1/videos/upload/{movieId}`
-`Content-Type: multipart/form-data`
-`file: [select any mp4 video]`
-
-**Step 3: Watch Encoding Service Logs**
-```text
-Consumed VideoUploadedEvent for movie: xxx
-Running FFmpeg for 1080p...
-Encoded 1080p successfully
-Running FFmpeg for 720p...
-Encoded 720p successfully
-Running FFmpeg for 480p...
-Encoded 480p successfully
-Running FFmpeg for 360p...
-Encoded 360p successfully
-Master playlist generated
-All encoded files uploaded to S3 ✅
-VideoEncodedEvent published ✅
-```
-
-**Step 4: Check Movie Status**
-`GET http://localhost:8081/api/v1/movies/{movieId}`
-Response should show:
-```json
-{
-    "videoStatus": "READY",
-    "hlsUrl": "https://your-bucket.s3.region.amazonaws.com/encoded/movieId/master.m3u8"
-}
-```
-
-**Step 5: Get Streaming URL**
-`GET http://localhost:8084/api/v1/stream/{movieId}`
-Response:
-```json
-{
-    "movieId": "xxx",
-    "streamingUrl": "https://your-bucket.s3.amazonaws.com/...",
-    "quality": "1080p, 720p, 480p, 360p",
-    "expiresInMinutes": 60
-}
-```
-
-**Step 6: Play Video**
-- Open `shoppable-stream.html` in Chrome
-- Enter Movie ID
-- Click Play
-- Video streams in 1080p, 720p, 480p, 360p automatically ✅
-
-## 🎬 Custom Shoppable-Streaming Player
-We built a custom HLS player that:
-- Calls Streaming Service automatically
-- Signs every HLS segment individually
-- Supports adaptive bitrate — switches quality based on internet speed
-- Works with private S3 bucket
-
-> ⚠️ **Important:** Third party HLS players (like hls-js.netlify.app, LiveReacting) will NOT work because they cannot sign individual segment requests. Use our `shoppable-stream.html` only.
-
-## 📂 Project Structure
-```text
-Shopy-stream-app/
-├── content-service/          → Movie catalog
-├── video-service/            → S3 upload + Kafka
-├── encoding-service/         → FFmpeg + HLS
-├── streaming-service/        → Signed URLs + Redis
-├── shoppable-stream.html     → Custom HLS video player
-├── docker-compose.yml        → Infrastructure
-└── README.md
-```
-
-## 🔑 Kafka Topics
-| Topic | Publisher | Consumer |
-|-------|-----------|----------|
-| `video.uploaded` | Video Service | Encoding Service, Content Service |
-| `video.encoded` | Encoding Service | Streaming Service, Content Service |
-
-## 🔒 Security
-- **Private S3 bucket** — videos not publicly accessible
-- **Signed URLs** — every HLS segment signed individually
-- **URL expiry** — 60 minutes
-- **Raw videos** — completely private, only encoded folder accessible
-
-## 📱 API Endpoints
-
-### Content Service (8081)
-- `POST   /api/v1/movies`              → Add movie
-- `GET    /api/v1/movies`              → Get all movies
-- `GET    /api/v1/movies/{id}`         → Get movie by ID
-- `GET    /api/v1/movies/genre/{genre}` → Get by genre
-- `GET    /api/v1/movies/search`       → Search by title
-
-### Video Service (8082)
-- `POST   /api/v1/videos/upload/{movieId}` → Upload video
-
-### Streaming Service (8084)
-- `GET    /api/v1/stream/{movieId}`           → Get streaming URL
-- `GET    /api/v1/stream/{movieId}/playlist`  → Get signed playlist
-
-## 🌟 Future Enhancements
-- **Interactive Shoppable Overlay**: Real-time product pop-ups synced to video timestamps with haptic mobile feedback for a tactile shopping experience.
-- **Analytics Dashboard**: Tracking video views, buffering events, shopping conversions, and user engagement.
-- **Content Recommendation Engine**: Suggesting new videos and products based on user watch history.
-- **Enhanced Security**: Implementing DRM (Digital Rights Management) for premium content.
-
-## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the issues page if you want to contribute.
-
-## 💡 Acknowledgements
-Building this platform was an incredible journey into the world of distributed systems and video engineering. A huge thank you to the open-source community for the amazing tools like FFmpeg, Kafka, and Spring Boot that make building systems at this scale possible!
+A modern, interactive streaming platform where viewers can click on objects inside a playing video to instantly discover and purchase them. Powered by AI object detection and seamlessly integrated with live e-commerce stores (WooCommerce & Amazon).
 
 ---
-*If you found this project interesting or helpful, don't forget to leave a ⭐!*
-#   S H O P A B L E - S T R E A M I N G - P L A T F O R M  
- 
+
+## ✨ Features
+- **AI Object Detection:** Automatically detects up to 80 different objects (clothes, electronics, furniture, etc.) in video streams using **YOLOv8**.
+- **Interactive Video Player:** Viewers can click on highlighted bounding boxes during video playback to see product details.
+- **E-Commerce Integration:** Instantly maps detected objects to real products in your **WooCommerce** store or falls back to Amazon affiliate links.
+- **Scalable Backend:** Robust **Spring Boot** architecture using WebFlux and MongoDB for storing time-series metadata of objects in the video.
+- **Dockerized ML Service:** A standalone Python/FastAPI microservice handles the heavy lifting of running YOLOv8 frame-by-frame analysis at 1 FPS.
+
+---
+
+## 🏗️ Architecture & Tech Stack
+
+### Frontend
+- **React.js (Vite)**
+- **TailwindCSS** for modern, responsive UI styling
+- `@woocommerce/woocommerce-rest-api` for live store connectivity
+
+### Backend
+- **Java Spring Boot 3**
+- **Spring WebFlux** (Reactive web client for async ML requests)
+- **MongoDB** (Storing timeline-based video metadata & detections)
+
+### Machine Learning Service
+- **Python 3.10** & **FastAPI**
+- **YOLOv8 (Ultralytics)** for object detection and bounding box generation
+- **OpenCV** & **Pillow** for frame extraction and image processing
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js (v18+)
+- Java 17
+- Maven
+- Docker & Docker Compose
+
+### 1. Start the ML Service and Databases (Docker)
+The Machine Learning service and MongoDB run in Docker.
+```bash
+docker-compose up -d --build
+```
+*This will spin up the YOLOv8 FastAPI service on port 8000 and MongoDB on port 27017.*
+
+### 2. Start the Spring Boot Backend
+Navigate to the `backend` folder and run the Spring Boot application:
+```bash
+cd backend
+./mvnw spring-boot:run
+```
+*The backend API will be available on port 8080.*
+
+### 3. Start the React Frontend
+Navigate to the `frontend` folder, install dependencies, and start the development server:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+*The web app will be available on http://localhost:5173.*
+
+---
+
+## ⚙️ Configuration
+
+### WooCommerce Integration
+To connect your own store, open `frontend/src/utils/woocommerce.js` and add your keys:
+```javascript
+const WooCommerce = new WooCommerceRestApi({
+  url: 'https://your-store-url.com', 
+  consumerKey: 'ck_your_consumer_key', 
+  consumerSecret: 'cs_your_consumer_secret', 
+  version: 'wc/v3'
+});
+```
+
+---
+
+## 🎥 How it Works
+1. **Upload:** User uploads an MP4 video via the React UI.
+2. **Analysis:** The Spring Boot backend forwards the video to the ML Service.
+3. **Detection:** YOLOv8 analyzes the video at 1 frame per second, generating bounding boxes and classifying objects (e.g., "laptop", "tie", "cup").
+4. **Metadata Storage:** The detections are enriched with product metadata and stored chronologically in MongoDB.
+5. **Playback:** As the user watches the video, the React player syncs with the timeline metadata to draw pixel-perfect interactive overlays on the video.
+
+---
+
+## 📄 License
+This project is licensed under the MIT License.
