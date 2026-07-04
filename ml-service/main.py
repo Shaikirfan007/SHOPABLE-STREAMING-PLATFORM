@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
-from ultralytics import YOLO
+import torch
+import pandas as pd
 import io
 from PIL import Image
 import uvicorn
@@ -15,11 +16,10 @@ logger = logging.getLogger(__name__)
 
 # ─── Logic from detections.py ──────────────────────────────────────────────────
 
-# Classes you want for the shopping website (from detections.py)
+# Open vocabulary classes for YOLO-World
 SELECTED_CLASSES = [
-    "chair", "tie", "umbrella", "cup", "bottle", "tv", "book", "laptop",
-    "cell phone", "handbag", "vase", "suitcase", "remote", "wine glass",
-    "bowl", "teddy bear", "skateboard", "skis", "surfboard"
+    "coat", "shoe", "t-shirt", "pants", "dress", "chair", "table", "tv", 
+    "person", "bag", "sunglasses", "hat", "furniture", "food"
 ]
 
 # Category mapping (from detections.py)
@@ -91,10 +91,10 @@ PRICE_MAP = {
     "surfboard":  350,
 }
 
-# ─── Load YOLOv8 model (from yolov8.py) ────────────────────────────────────────
-
-logger.info("Loading YOLOv8 model...")
-model = YOLO("yolov8s.pt")
+logger.info("Loading YOLO-World model...")
+from ultralytics import YOLOWorld
+model = YOLOWorld('yolov8s-world.pt')
+model.set_classes(SELECTED_CLASSES)
 logger.info("Model loaded successfully.")
 
 
@@ -118,20 +118,21 @@ async def detect_objects(file: UploadFile = File(...)):
     """Detect shoppable objects in a single image (mirrors yolov8.py frame logic)."""
     try:
         image = Image.open(io.BytesIO(await file.read()))
-        results = model(image, conf=0.3)
+        results = model.predict(image, conf=0.1)
 
         detections = []
-        for r in results:
-            for box in r.boxes:
-                label = model.names[int(box.cls[0])]
-                if label not in SELECTED_CLASSES:
-                    continue
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                detections.append(enrich_detection(
-                    label, conf,
-                    {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
-                ))
+        df = results[0].boxes.data.cpu().numpy()
+        for row in df:
+            x1, y1, x2, y2, conf, cls_id = row
+            label = SELECTED_CLASSES[int(cls_id)]
+            
+            if label not in SELECTED_CLASSES:
+                continue
+
+            detections.append(enrich_detection(
+                label, float(conf),
+                {"x1": float(x1), "y1": float(y1), "x2": float(x2), "y2": float(y2)}
+            ))
 
         return JSONResponse(content={"status": "success", "detections": detections})
 
@@ -166,26 +167,24 @@ async def analyze_video(file: UploadFile = File(...)):
                 break
 
             if frame_count % frame_interval == 0:
-                # ── yolov8.py detection core ──
-                results = model(frame, conf=0.3)
+                # ── YOLO-World detection core ──
+                results = model.predict(frame, conf=0.1, verbose=False)
                 detections = []
 
-                for r in results:
-                    for box in r.boxes:
-                        label = model.names[int(box.cls[0])]
+                df = results[0].boxes.data.cpu().numpy()
+                for row in df:
+                    x1, y1, x2, y2, conf, cls_id = row
+                    label = SELECTED_CLASSES[int(cls_id)]
 
-                        # ── detections.py filter ──
-                        if label not in SELECTED_CLASSES:
-                            continue
+                    # ── detections.py filter ──
+                    if label not in SELECTED_CLASSES:
+                        continue
 
-                        conf = float(box.conf[0])
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-
-                        # ── detections.py enrichment ──
-                        detections.append(enrich_detection(
-                            label, conf,
-                            {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
-                        ))
+                    # ── detections.py enrichment ──
+                    detections.append(enrich_detection(
+                        label, float(conf),
+                        {"x1": float(x1), "y1": float(y1), "x2": float(x2), "y2": float(y2)}
+                    ))
 
                 timeline[str(second_count)] = detections
                 second_count += 1

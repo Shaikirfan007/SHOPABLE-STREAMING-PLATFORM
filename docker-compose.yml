@@ -32,6 +32,35 @@ services:
       - "8000:8000"
     restart: unless-stopped
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shoppable_backend
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/shoppablestream
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/shoppablestream
+      - SPRING_MONGODB_URI=mongodb://mongodb:27017/shoppablestream
+      - ML_SERVICE_URL=http://ml-service:8000
+    depends_on:
+      - postgres
+      - mongodb
+      - ml-service
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: shoppable_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   shoppable_postgres_data:
   mongodb_data:

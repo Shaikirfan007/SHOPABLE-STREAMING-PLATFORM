@@ -1,0 +1,12 @@
+{
+  "0": [],
+  "1": [
+    {
+      "product": "Person",
+      "category": "General",
+      "price": "20",
+      "shop_url": "https://www.amazon.com/s?k=person",
+      "confidence": 0.96,
+      "mask": [
+        [
+          

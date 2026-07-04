@@ -7,7 +7,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.util.Map;
 
 @Data
-@Document(collection = "video_metadata")
+@Document(collection = "videoMetadata")
 public class VideoMetadata {
     
     @Id
@@ -17,4 +17,8 @@ public class VideoMetadata {
     
     // Timeline maps a second (e.g., "0", "1", "2") to a list of detections
     private Map<String, Object> timeline;
+    
+    // TwelveLabs generative AI metadata
+    private String twelvelabs_analysis;
+    private String twelvelabs_asset_id;
 }
