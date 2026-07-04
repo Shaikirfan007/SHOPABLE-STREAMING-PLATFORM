@@ -5,6 +5,15 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+# Create a 4GB swap file (Crucial for t2.micro / t3.micro instances to prevent crashing)
+echo "Creating 4GB swap file..."
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+# Make swap permanent
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
 # Update packages
 sudo apt-get update -y
 
